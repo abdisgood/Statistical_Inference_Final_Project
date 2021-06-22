@@ -1,0 +1,261 @@
+---
+title: "Inferential analysis on Tooth Growth response for Guinea Pigs"
+author: "Syed Abdullah Hasan"
+date: "6/20/2021"
+output:
+  pdf_document: default
+  html_document: default
+---
+``` {r Load required libraries, include = FALSE}
+library (ggplot2)
+library (dplyr)
+library (knitr)
+library (broom)
+library (purrr)
+```
+
+## Overview  
+
+This report is prepared as the final project submission for the Statistical Inference course offered by Johns Hopkins University on Coursera. This second part of the report analyses Tooth Growth data from the R package to infer relationships between tooth growth and supplement dosage, supported by hypothesis testing and conclusions. The report concludes that dosage significantly affects the tooth growth response rate in Guinea Pigs, but the choice of supplement is does not have a statistically significant impact beyond a dosage of 1.0 mg/day.
+
+## Part 2 - Basic Inferential Data Analysis  
+
+This section of the report will provide a basic inferential data analysis on the Tooth Growth data in the R package. The data is first loaded into an R object for processing.
+
+``` {r Load Tooth Growth Dataset}
+data("ToothGrowth")
+ToothGrowth$dose <- as.factor(as.character(ToothGrowth$dose))
+```
+
+### Data Summary
+This data set covers the results of testing on Guinea Pigs to evaluate the effect of Vitamin C on tooth growth. The data set includes three variables:  
+
+- "len" denoting the response, which is the length of odontoblasts (cells responsible for tooth growth) in 60 guinea pigs;
+- "supp" denoting the supplement administered (in this case Vitamin C) ; and, 
+- "dose" denoting the level of Vitamin C administered. Each animal received one of three dose levels of vitamin C (0.5, 1, and 2 mg/day) by one of two delivery methods, orange juice (coded as OJ) or ascorbic acid (a form of vitamin C and coded as VC).
+
+``` {r Exploratory Data Analysis for Tooth Growth data set}
+g1 <- ggplot(ToothGrowth, aes(x = dose, y = len, 
+                              color = dose, 
+                              group = dose, 
+                              shape = supp)) + 
+        facet_wrap(~supp) +
+        geom_point () +
+        geom_boxplot(aes(fill=supp)) + 
+        scale_fill_manual (values = c(4,5)) + 
+        labs (title = "Chart 1 - Tooth Growth response in Guinea Pigs based on medium and dosage",
+              x = "Dose (mg/day)",
+              y = "Tooth Length (mm)")
+
+
+g1
+
+g2 <- ggplot(ToothGrowth, aes(x = supp, y = len, 
+                              color = supp, 
+                              group = supp, 
+                              shape = dose)) + 
+        facet_wrap(~dose) +
+        geom_point () +
+        geom_boxplot(aes(fill=dose)) + 
+        scale_fill_manual (values = c(4,5,6)) + 
+        labs (title = "Chart 2 - Tooth Growth response in Guinea Pigs based on medium and dosage",
+              x = "Supplement",
+              y = "Tooth Length (mm)")
+
+
+g2
+```
+
+``` {r Table 1 - Summary features of Tooth Growth data set, message=FALSE, warning = FALSE}
+
+df_summary <-  ToothGrowth %>% summarise("Supplement" = "All",
+                                         "Dose" = "All",
+                                         "Mean" = mean(len),
+                                         "Std." = sd(len),
+                                         "Min." = min(len),
+                                         "Q1" = quantile(len,0.25),
+                                         "Median" = median(len),
+                                         "Q3" = quantile(len,0.75),
+                                         "Max." = max(len))
+
+df_summary <-  rbind(df_summary, ToothGrowth %>% group_by ("Supplement" = supp) %>% 
+                                summarise("Dose" = "All", 
+                                "Mean" = mean(len),
+                                "Std." = sd(len),
+                                "Min." = min(len),
+                                "Q1" = quantile(len,0.25),
+                                "Median" = median(len),
+                                "Q3" = quantile(len,0.75),
+                                "Max." = max(len))
+                     )
+
+df_summary <-  rbind(df_summary,
+                     ToothGrowth %>%
+                     group_by ("Supplement" = "All",
+                               "Dose" = as.character(format(dose,nsmall=1))) %>%
+                               summarise("Mean" = mean(len),
+                                         "Std." = sd(len),
+                                         "Min." = min(len),
+                                         "Q1" = quantile(len,0.25),
+                                         "Median" = median(len),
+                                         "Q3" = quantile(len,0.75),
+                                         "Max." = max(len))
+                        )
+
+
+df_summary <-  rbind(df_summary, 
+                     ToothGrowth %>%
+                     group_by ("Supplement" = supp,
+                               "Dose" = as.character(format(dose,nsmall=1))) %>%
+                               summarise("Mean" = mean(len),
+                                         "Std." = sd(len),
+                                         "Min." = min(len),
+                                         "Q1" = quantile(len,0.25),
+                                         "Median" = median(len),
+                                         "Q3" = quantile(len,0.75),
+                                         "Max." = max(len))
+                     )
+        
+
+kable (df_summary, 
+       caption = "Table 1 - Summary statistics for Tooth Growth data set",
+       digits = 2,
+       format.args = list(big.mark=",",
+                       scientific = FALSE,
+                       nsmall = 2
+                               )
+       )
+```
+As seen in Chart 4 and Table 1, the response rate for tooth growth in Guinea Pigs appears to be greatest in the case of Vitamin C when administered 2.0 mg/day. However, the variability in this case is also very high. For lower doses of Vitamin C, the response rate appears to be weaker than when Orange Juice is administered. However, variability in growth rates when Orange Juice is administered appears to be higher when 0.5 mg/day or 1.0 mg/day is administered. 
+
+### Hypothesis Formulation and Testing  
+
+Based on these initial observations, the key questions to be evaluated across the data set are as follows:
+
+- Case 1: Does Orange Juice lead to higher tooth growth as compared with Vitamin C?
+- Case 2: Does higher dosage lead to higher tooth growth?
+- Case 3: Does choice of supplement contribute to higher tooth growth for a given dosage level?
+
+The following hypothesis may be developed for testing the above cases:
+
+#### Testing effect of supplement on growth response 
+
+Case 1. Administering Orange Juice leads to a higher response rate versus Vitamin C:  
+- H~0~: $\mu$~OJ~ - $\mu$~VC~  = 0  
+- H~1~: $\mu$~OJ~ - $\mu$~VC~  <> 0  
+
+#### Testing effect of dosage on growth response  
+
+Case 2a. Administering 1.0 mg/day dosage leads to a higher response rate versus 0.5 mg/day:  
+- H~0~: $\mu$~D=0.5~ - $\mu$~D=1.0~  = 0  
+- H~1~: $\mu$~D=0.5~ - $\mu$~D=1.0~  <> 0  
+
+Case 2b. Administering 2.0 mg/day dosage leads to a higher response rate versus 0.5 mg/day:  
+- H~0~: $\mu$~D=0.5~ - $\mu$~D=2.0~  = 0  
+- H~1~: $\mu$~D=0.5~ - $\mu$~D=2.0~  <> 0  
+
+Case 2c. Administering 2.0 mg/day dosage leads to a higher response rate versus 1.0 mg/day:  
+- H~0~: $\mu$~D=0.5~ - $\mu$~D=2.0~  = 0  
+- H~1~: $\mu$~D=0.5~ - $\mu$~D=2.0~  <> 0 
+
+#### Testing supplement as a factor for given dose levels  
+
+Case 3a. Administering Orange Juice leads to a higher response rate for doses of 0.5 mg/day:  
+- H~0~: $\mu$~OJ~ | ~D = 0.5~ - $\mu$~VC~ | ~D = 0.5~  = 0  
+- H~1~: $\mu$~OJ~ | ~D = 0.5~ - $\mu$~VC~ | ~D = 0.5~ <> 0 
+
+Case 3b. Administering Orange Juice leads to a higher response rate for doses of 1.0 mg/day:  
+- H~0~: $\mu$~OJ~ | ~D = 1.0~ - $\mu$~VC~ | ~D = 1.0~  = 0  
+- H~1~: $\mu$~OJ~ | ~D = 1.0~ - $\mu$~VC~ | ~D = 1.0~ <> 0 
+
+Case 3c. Administering Orange Juice leads to a higher response rate for doses of 2.0 mg/day:  
+- H~0~: $\mu$~OJ~ | ~D = 2.0~ - $\mu$~VC~ | ~D = 2.0~  = 0  
+- H~1~: $\mu$~OJ~ | ~D = 2.0~ - $\mu$~VC~ | ~D = 2.0~ <> 0 
+
+The data is first subset to evaluate each of the cases mentioned above.
+
+``` {r Subsetting data for hypothesis testing}
+c2a <- filter(ToothGrowth, dose %in% c(0.5, 1.0))
+c2b <- filter(ToothGrowth, dose %in% c(0.5, 2.0))
+c2c <- filter(ToothGrowth, dose %in% c(1.0, 2.0))
+c3a <- filter(ToothGrowth, dose == 0.5)
+c3b <- filter(ToothGrowth, dose == 1.0)
+c3c <- filter(ToothGrowth, dose == 2.0)
+```
+
+A t-test may be used to evaluate the null hypothesis, since the sample size is small in all cases. The data is not paired since a single observation is recorded for each of 60 subjects. However, variances between the factors need to be tested in order to confirm the parameters for the t-test. 
+
+``` {r Testing variance between response and factors}
+v1 <- var.test (len ~ supp, ToothGrowth)
+v2a <- var.test (len ~ dose, c2a)
+v2b <- var.test (len ~ dose, c2b)
+v2c <- var.test (len ~ dose, c2c)
+v3a <- var.test (len ~ supp, c3a)
+v3b <- var.test (len ~ supp, c3b)
+v3c <- var.test (len ~ supp, c3c)
+
+table <- map_df(list(v1, v2a, v2b, v2c, v3a, v3b, v3c), tidy)[,c(2,4,5,8,9)]
+names(table) <- c("Parameter (df)", "Statistic", "p-value",
+                  "Method", "Alternative")
+row.names(table) <- c("Case 1", "Case 2a", "Case 2b", "Case 2c", "Case 3a", 
+                      "Case 3b", "Case 3c")
+
+kable (table,
+       digits = 2,
+       format.args = list(big.mark=",",
+                          scientific = FALSE,
+                          nsmall = 2),
+       caption = "Table 2 - Summary of F-test to compare sample variances for hypothesis testing"
+        )
+```
+Based on the p-values in Table 2 above, we can accept the null hypotheses that the true ratio of variances is equal to 1 in all cases. The parameters for t-testing will therefore be set to incorporate equal variances. 
+
+```{r T-test Supplment effect on growth response}
+
+
+t1 <- t.test (len ~ supp, data=ToothGrowth, 
+              conf.level = 0.95, alternative = "two.sided", var.equal = T)
+t2a <- t.test (len ~ dose, data=c2a, conf.level = 0.95, 
+               alternative = "two.sided", var.equal = T)
+t2b <- t.test (len ~ dose, data=c2b, conf.level = 0.95, 
+               alternative = "two.sided", var.equal = T)
+t2c <- t.test (len ~ dose, data=c2c, conf.level = 0.95, 
+               alternative = "two.sided", var.equal = T)
+t3a <- t.test (len ~ supp, data=c3a, conf.level = 0.95, 
+               alternative = "two.sided", var.equal = T)
+t3b <- t.test (len ~ supp, data=c3b, conf.level = 0.95, 
+               alternative = "two.sided", var.equal = T)
+t3c <- t.test (len ~ supp, data=c3c, conf.level = 0.95, 
+               alternative = "two.sided", var.equal = T)
+
+table <- map_df(list(t1, t2a, t2b, t2c, t3a, t3b, t3c), tidy)[,4:10]
+names(table) <- c("Statistic", "p-value", "Parameter (df)", 
+                  "C.I. - Low", "C.I. - High", "Method", "Alternative")
+row.names(table) <- c("Case 1", "Case 2a", "Case 2b", "Case 2c", "Case 3a", 
+                      "Case 3b", "Case 3c")
+
+kable (table,
+       digits = 2,
+       format.args = list(big.mark=",",
+                          scientific = FALSE,
+                          nsmall = 2),
+       caption = "Table 3 - Summary of t-test to evaluate hypothesis for each case"
+        )
+
+
+```
+Based on the summary statistics and p-values in Table 3 above, we can accept the null hypothesis for case 1 and 3c. In all other cases, we can reject the null hypothesis that the true difference in means between two variables is zero.
+
+### Conclusions and supporting assumptions
+
+The report can finally conclude the following statistically significant relationships:
+
+- Case 1: Administering Orange juice does not significantly boost tooth growth as compared with Vitamin C.
+- Case 2a-c: A higher dosage of supplement significantly boosts tooth growth, regardless of supplement used.
+- Case 3a-c: Up to dosage of 1.0 mg/day, administering Orange Juice significantly leads to a higher response rate for tooth growth - however, this relationship is not statistically significant for a dosage of 2.0mg/day.
+
+In order to arrive at the above conclusions, the following assumptions for two-sample t-tests are made:
+
+- The response rate data is continuous and normally distributed. 
+- The variances of the two populations (those administered Vitamin C and those administered Orange Juice) are equal.
+- All subjects included in the study are randomly sampled and independent - therefore,  there is no prior underlying relationship between the response rate and the subjects.
